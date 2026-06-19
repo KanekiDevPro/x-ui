@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"x-ui/util/common"
+	"github.com/alireza0/x-ui/util/common"
 )
 
 type Msg struct {
@@ -27,6 +27,7 @@ type AllSetting struct {
 	ExpireDiff       int    `json:"expireDiff" form:"expireDiff"`
 	TrafficDiff      int    `json:"trafficDiff" form:"trafficDiff"`
 	RemarkModel      string `json:"remarkModel" form:"remarkModel"`
+	OutboundTestUrl  string `json:"outboundTestUrl" form:"outboundTestUrl"`
 	TgBotEnable      bool   `json:"tgBotEnable" form:"tgBotEnable"`
 	TgBotToken       string `json:"tgBotToken" form:"tgBotToken"`
 	TgBotChatId      string `json:"tgBotChatId" form:"tgBotChatId"`
@@ -52,7 +53,8 @@ type AllSetting struct {
 	SubJsonFragment  string `json:"subJsonFragment" form:"subJsonFragment"`
 	SubJsonNoises    string `json:"subJsonNoises" form:"subJsonNoises"`
 	SubJsonMux       string `json:"subJsonMux" form:"subJsonMux"`
-	SubJsonRules     string `json:"subJsonRules" form:"subJsonRules"`
+	SubJsonRules       string `json:"subJsonRules" form:"subJsonRules"`
+	IpBlockAfterRemove bool   `json:"ipBlockAfterRemove" form:"ipBlockAfterRemove"`
 }
 
 func (s *AllSetting) CheckValid() error {

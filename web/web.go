@@ -14,15 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"x-ui/config"
-	"x-ui/logger"
-	"x-ui/util/common"
-	"x-ui/web/controller"
-	"x-ui/web/job"
-	"x-ui/web/locale"
-	"x-ui/web/middleware"
-	"x-ui/web/network"
-	"x-ui/web/service"
+	"github.com/alireza0/x-ui/config"
+	"github.com/alireza0/x-ui/iplimit"
+	"github.com/alireza0/x-ui/logger"
+	"github.com/alireza0/x-ui/util/common"
+	"github.com/alireza0/x-ui/web/controller"
+	"github.com/alireza0/x-ui/web/job"
+	"github.com/alireza0/x-ui/web/locale"
+	"github.com/alireza0/x-ui/web/middleware"
+	"github.com/alireza0/x-ui/web/network"
+	"github.com/alireza0/x-ui/web/service"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
@@ -87,6 +88,7 @@ type Server struct {
 	xui    *controller.XUIController
 	api    *controller.APIController
 
+	ipLimitFw      iplimit.Firewall
 	xrayService    service.XrayService
 	settingService service.SettingService
 	tgbotService   service.Tgbot
@@ -176,13 +178,31 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	sessionMaxAge, err := s.settingService.GetSessionMaxAge()
+	if err != nil {
+		return nil, err
+	}
 	engine.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{basePath + "xui/API/"})))
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
+	sessionOptions := sessions.Options{
+		Path:     basePath,
+		HttpOnly: true,
+	}
+	if sessionMaxAge > 0 {
+		sessionOptions.MaxAge = sessionMaxAge * 60
+	}
+	store.Options(sessionOptions)
 	engine.Use(sessions.Sessions("x-ui", store))
+	iplimitSupported := "true"
+	if !s.ipLimitFw.Supported() {
+		iplimitSupported = "false"
+	}
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
+		c.Set("iplimitSupported", iplimitSupported)
 	})
 	engine.Use(func(c *gin.Context) {
 		uri := c.Request.RequestURI
@@ -228,18 +248,25 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.index = controller.NewIndexController(g)
 	s.server = controller.NewServerController(g)
 	s.xui = controller.NewXUIController(g)
-	s.api = controller.NewAPIController(g)
+	s.api = controller.NewAPIController(g, s.server)
+
+	engine.NoRoute(func(c *gin.Context) {
+		c.AbortWithStatus(http.StatusNotFound)
+	})
 
 	return engine, nil
 }
 
-func (s *Server) startTask() {
+func (s *Server) startTask(ipLimitCron bool) {
 	err := s.xrayService.RestartXray(true)
 	if err != nil {
 		logger.Warning("start xray failed:", err)
 	}
 	// Check whether xray is running every 30 seconds
 	s.cron.AddJob("@every 30s", job.NewCheckXrayRunningJob())
+
+	// Process ip online and ip limit
+	s.cron.AddJob("@every 2s", job.NewIpLimitJob())
 
 	// Check if xray needs to be restarted
 	s.cron.AddFunc("@every 10s", func() {
@@ -290,6 +317,18 @@ func (s *Server) Start() (err error) {
 			s.Stop()
 		}
 	}()
+
+	s.ipLimitFw = iplimit.NewFirewall()
+	if s.ipLimitFw.Supported() {
+		if err := s.ipLimitFw.Init(); err != nil {
+			logger.Error("init iplimit failed:", err)
+		}
+	}
+
+	ipBlockAfterRemove, _ := s.settingService.GetIpBlockAfterRemove()
+	if err := service.InitOnlineStore(s.ipLimitFw, ipBlockAfterRemove); err != nil {
+		logger.Warning("init online store failed:", err)
+	}
 
 	loc, err := s.settingService.GetTimeLocation()
 	if err != nil {
@@ -350,7 +389,7 @@ func (s *Server) Start() (err error) {
 		s.httpServer.Serve(listener)
 	}()
 
-	s.startTask()
+	s.startTask(s.ipLimitFw.Supported())
 
 	isTgbotenabled, err := s.settingService.GetTgbotenabled()
 	if (err == nil) && (isTgbotenabled) {
@@ -364,6 +403,11 @@ func (s *Server) Start() (err error) {
 func (s *Server) Stop() error {
 	s.cancel()
 	s.xrayService.StopXray()
+	if s.ipLimitFw != nil {
+		if err := s.ipLimitFw.Stop(); err != nil {
+			logger.Warning("stop iplimit failed:", err)
+		}
+	}
 	if s.cron != nil {
 		s.cron.Stop()
 	}
@@ -387,4 +431,8 @@ func (s *Server) GetCtx() context.Context {
 
 func (s *Server) GetCron() *cron.Cron {
 	return s.cron
+}
+
+func (s *Server) RestartXray() error {
+	return s.xrayService.RestartXray(true)
 }

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"x-ui/config"
-	"x-ui/logger"
-	"x-ui/web/entity"
+	"github.com/alireza0/x-ui/config"
+	"github.com/alireza0/x-ui/logger"
+	"github.com/alireza0/x-ui/web/entity"
 
 	"github.com/gin-gonic/gin"
 )
@@ -68,6 +68,7 @@ func html(c *gin.Context, name string, title string, data gin.H) {
 	data["host"] = host
 	data["request_uri"] = c.Request.RequestURI
 	data["base_path"] = c.GetString("base_path")
+	data["iplimitSupported"] = c.GetString("iplimitSupported")
 	c.HTML(http.StatusOK, name, getContext(data))
 }
 

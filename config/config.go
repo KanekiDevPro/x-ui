@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -13,13 +15,19 @@ var version string
 //go:embed name
 var name string
 
+//go:embed default_xray.json
+var defaultXrayTemplate string
+
+//go:embed test_xray.json
+var testXrayTemplate string
+
 type LogLevel string
 
 const (
-	Debug LogLevel = "debug"
-	Info  LogLevel = "info"
-	Warn  LogLevel = "warn"
-	Error LogLevel = "error"
+	Debug   LogLevel = "debug"
+	Info    LogLevel = "info"
+	Warning LogLevel = "warning"
+	Error   LogLevel = "error"
 )
 
 func GetVersion() string {
@@ -53,14 +61,42 @@ func GetBinFolderPath() string {
 	return binFolderPath
 }
 
+func getBaseDir() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	exeDir := filepath.Dir(exePath)
+	exeDirLower := strings.ToLower(filepath.ToSlash(exeDir))
+	if strings.Contains(exeDirLower, "/appdata/local/temp/") || strings.Contains(exeDirLower, "/go-build") {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "."
+		}
+		return wd
+	}
+	return exeDir
+}
+
 func GetDBFolderPath() string {
 	dbFolderPath := os.Getenv("XUI_DB_FOLDER")
-	if dbFolderPath == "" {
-		dbFolderPath = "/etc/x-ui"
+	if dbFolderPath != "" {
+		return dbFolderPath
 	}
-	return dbFolderPath
+	if runtime.GOOS == "windows" {
+		return getBaseDir()
+	}
+	return "/etc/x-ui"
 }
 
 func GetDBPath() string {
 	return fmt.Sprintf("%s/%s.db", GetDBFolderPath(), GetName())
+}
+
+func GetDefaultXrayTemplate() string {
+	return defaultXrayTemplate
+}
+
+func GetTestXrayTemplate() string {
+	return testXrayTemplate
 }

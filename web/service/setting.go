@@ -1,7 +1,6 @@
 package service
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,20 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"x-ui/database"
-	"x-ui/database/model"
-	"x-ui/logger"
-	"x-ui/util/common"
-	"x-ui/util/random"
-	"x-ui/util/reflect_util"
-	"x-ui/web/entity"
+	"github.com/alireza0/x-ui/config"
+	"github.com/alireza0/x-ui/database"
+	"github.com/alireza0/x-ui/database/model"
+	"github.com/alireza0/x-ui/logger"
+	"github.com/alireza0/x-ui/util/common"
+	"github.com/alireza0/x-ui/util/random"
+	"github.com/alireza0/x-ui/util/reflect_util"
+	"github.com/alireza0/x-ui/web/entity"
 )
 
-//go:embed config.json
-var xrayTemplateConfig string
-
 var defaultValueMap = map[string]string{
-	"xrayTemplateConfig": xrayTemplateConfig,
+	"xrayTemplateConfig": config.GetDefaultXrayTemplate(),
 	"webListen":          "",
 	"webDomain":          "",
 	"webPort":            "54321",
@@ -36,6 +33,7 @@ var defaultValueMap = map[string]string{
 	"expireDiff":         "0",
 	"trafficDiff":        "0",
 	"remarkModel":        "-ieo",
+	"outboundTestUrl":    "https://www.gstatic.com/generate_204",
 	"timeLocation":       "Asia/Tehran",
 	"tgBotEnable":        "false",
 	"tgBotToken":         "",
@@ -63,6 +61,7 @@ var defaultValueMap = map[string]string{
 	"subJsonMux":         "",
 	"subJsonRules":       "",
 	"warp":               "",
+	"ipBlockAfterRemove": "false",
 }
 
 type SettingService struct{}
@@ -315,6 +314,10 @@ func (s *SettingService) GetRemarkModel() (string, error) {
 	return s.getString("remarkModel")
 }
 
+func (s *SettingService) GetOutboundTestUrl() (string, error) {
+	return s.getString("outboundTestUrl")
+}
+
 func (s *SettingService) GetSecret() ([]byte, error) {
 	secret, err := s.getString("secret")
 	if secret == defaultValueMap["secret"] {
@@ -359,13 +362,26 @@ func (s *SettingService) GetTimeLocation() (*time.Location, error) {
 	if err != nil {
 		defaultLocation := defaultValueMap["timeLocation"]
 		logger.Errorf("location <%v> not exist, using default location: %v", l, defaultLocation)
-		return time.LoadLocation(defaultLocation)
+		location, err = time.LoadLocation(defaultLocation)
+		if err != nil {
+			logger.Errorf("failed to load default location, using UTC: %v", err)
+			return time.UTC, nil
+		}
+		return location, nil
 	}
 	return location, nil
 }
 
 func (s *SettingService) GetSubEnable() (bool, error) {
 	return s.getBool("subEnable")
+}
+
+func (s *SettingService) GetIpBlockAfterRemove() (bool, error) {
+	return s.getBool("ipBlockAfterRemove")
+}
+
+func (s *SettingService) SetIpBlockAfterRemove(value bool) error {
+	return s.setBool("ipBlockAfterRemove", value)
 }
 
 func (s *SettingService) GetSubListen() (string, error) {
@@ -467,7 +483,7 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 
 func (s *SettingService) GetDefaultXrayConfig() (interface{}, error) {
 	var jsonData interface{}
-	err := json.Unmarshal([]byte(xrayTemplateConfig), &jsonData)
+	err := json.Unmarshal([]byte(config.GetDefaultXrayTemplate()), &jsonData)
 	if err != nil {
 		return nil, err
 	}
@@ -477,16 +493,17 @@ func (s *SettingService) GetDefaultXrayConfig() (interface{}, error) {
 func (s *SettingService) GetDefaultSettings(host string) (interface{}, error) {
 	type settingFunc func() (interface{}, error)
 	settings := map[string]settingFunc{
-		"expireDiff":  func() (interface{}, error) { return s.GetExpireDiff() },
-		"trafficDiff": func() (interface{}, error) { return s.GetTrafficDiff() },
-		"pageSize":    func() (interface{}, error) { return s.GetPageSize() },
-		"defaultCert": func() (interface{}, error) { return s.GetCertFile() },
-		"defaultKey":  func() (interface{}, error) { return s.GetKeyFile() },
-		"tgBotEnable": func() (interface{}, error) { return s.GetTgbotenabled() },
-		"subEnable":   func() (interface{}, error) { return s.GetSubEnable() },
-		"subURI":      func() (interface{}, error) { return s.GetSubURI() },
-		"subJsonURI":  func() (interface{}, error) { return s.GetSubJsonURI() },
-		"remarkModel": func() (interface{}, error) { return s.GetRemarkModel() },
+		"expireDiff":         func() (interface{}, error) { return s.GetExpireDiff() },
+		"trafficDiff":        func() (interface{}, error) { return s.GetTrafficDiff() },
+		"pageSize":           func() (interface{}, error) { return s.GetPageSize() },
+		"defaultCert":        func() (interface{}, error) { return s.GetCertFile() },
+		"defaultKey":         func() (interface{}, error) { return s.GetKeyFile() },
+		"tgBotEnable":        func() (interface{}, error) { return s.GetTgbotenabled() },
+		"subEnable":          func() (interface{}, error) { return s.GetSubEnable() },
+		"subURI":             func() (interface{}, error) { return s.GetSubURI() },
+		"subJsonURI":         func() (interface{}, error) { return s.GetSubJsonURI() },
+		"remarkModel":        func() (interface{}, error) { return s.GetRemarkModel() },
+		"ipBlockAfterRemove": func() (interface{}, error) { return s.GetIpBlockAfterRemove() },
 	}
 
 	result := make(map[string]interface{})

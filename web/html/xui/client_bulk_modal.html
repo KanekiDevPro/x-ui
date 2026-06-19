@@ -27,7 +27,7 @@
         <a-form-item label='{{ i18n "pages.client.clientCount" }}' v-if="clientsBulkModal.emailMethod < 2">
             <a-input-number v-model.number="clientsBulkModal.quantity" :min="1" :max="100"></a-input-number>
         </a-form-item>
-        <a-form-item label='Flow' v-if="clientsBulkModal.inbound.canEnableTlsFlow()">
+        <a-form-item label='{{ i18n "pages.inbounds.protocols.flow" }}' v-if="clientsBulkModal.inbound.canEnableTlsFlow()">
             <a-select v-model="clientsBulkModal.flow" :dropdown-class-name="themeSwitcher.currentTheme">
                 <a-select-option value="" selected>{{ i18n "none" }}</a-select-option>
                 <a-select-option v-for="key in TLS_FLOW_CONTROL" :value="key">[[ key ]]</a-select-option>
@@ -68,6 +68,19 @@
                 </a-tooltip>
             </template>
             <a-input-number v-model.number="clientsBulkModal.totalGB" :min="0"></a-input-number> GB
+        </a-form-item>
+        <a-form-item>
+            <template slot="label">
+                <a-tooltip>
+                    <template slot="title">
+                        <span>{{ i18n "pages.inbounds.limitIpDesc" }}</span>
+                    </template>
+                    {{ i18n "pages.inbounds.limitIp" }}
+                    <a-icon type="question-circle"></a-icon>
+                </a-tooltip>
+            </template>
+            <a-input-number v-if="app.iplimitSupported" v-model.number="clientsBulkModal.limitIp" :min="0"></a-input-number>
+            <span v-else>{{ i18n "pages.inbounds.limitIpNotSupported" }}</span>
         </a-form-item>
         <a-form-item label='{{ i18n "pages.client.delayedStart" }}'>
             <a-switch v-model="clientsBulkModal.delayedStart" @click="clientsBulkModal.expiryTime=0"></a-switch>
@@ -115,6 +128,7 @@
         inbound: new Inbound(),
         quantity: 1,
         totalGB: 0,
+        limitIp: 0,
         expiryTime: '',
         emailMethod: 0,
         firstNum: 1,
@@ -146,6 +160,7 @@
                 if (clientsBulkModal.subId.length > 0) newClient.subId = clientsBulkModal.subId;
                 if (clientsBulkModal.tgId.length > 0) newClient.tgId = clientsBulkModal.tgId;
                 newClient._totalGB = clientsBulkModal.totalGB;
+                newClient.limitIp = clientsBulkModal.limitIp;
                 newClient._expiryTime = clientsBulkModal.expiryTime;
                 if(clientsBulkModal.inbound.canEnableTlsFlow()){
                     newClient.flow = clientsBulkModal.flow;
@@ -162,6 +177,7 @@
             this.confirm = confirm;
             this.quantity = 1;
             this.totalGB = 0;
+            this.limitIp = 0;
             this.expiryTime = 0;
             this.emailMethod= 0;
             this.firstNum= 1;
@@ -182,6 +198,7 @@
                 case Protocols.VLESS: return new Inbound.VLESSSettings.VLESS();
                 case Protocols.TROJAN: return new Inbound.TrojanSettings.Trojan();
                 case Protocols.SHADOWSOCKS: return new Inbound.ShadowsocksSettings.Shadowsocks(clientsBulkModal.inbound.settings.shadowsockses[0].method);
+                case Protocols.HYSTERIA: return new Inbound.HysteriaSettings.Hysteria();
                 default: return null;
             }
         },
