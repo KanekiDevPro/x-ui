@@ -51,6 +51,9 @@
         <a-form-item label='{{ i18n "pages.inbounds.stream.tls.allowInsecure" }}'>
             <a-switch v-model="inbound.stream.tls.settings.allowInsecure"></a-switch>
         </a-form-item>
+        <a-form-item label='{{ i18n "pages.outbounds.verifyPeerCertByName" }}'>
+            <a-input v-model.trim="inbound.stream.tls.settings.verifyPeerCertByName"></a-input>
+        </a-form-item>
         <a-form-item label='{{ i18n "pages.inbounds.stream.tls.rejectUnknownSni" }}'>
             <a-switch v-model="inbound.stream.tls.rejectUnknownSni"></a-switch>
         </a-form-item>
@@ -59,6 +62,15 @@
         </a-form-item>
         <a-form-item label='{{ i18n "pages.inbounds.stream.tls.sessionResumption" }}'>
         <a-switch v-model="inbound.stream.tls.enableSessionResumption"></a-switch>
+        </a-form-item>
+        <a-form-item label='{{ i18n "pages.inbounds.stream.tls.curvePreferences" }}'>
+            <a-select mode="tags" :dropdown-class-name="themeSwitcher.currentTheme"
+                v-model="inbound.stream.tls.curvePreferences">
+                <a-select-option v-for="c in ['x25519','curvep256','curvep384','curvep521','x25519mlkem768','secp256r1mlkem768','secp384r1mlkem1024']" :value="c">[[ c ]]</a-select-option>
+            </a-select>
+        </a-form-item>
+        <a-form-item label='{{ i18n "pages.inbounds.stream.tls.masterKeyLog" }}'>
+            <a-input v-model.trim="inbound.stream.tls.masterKeyLog"></a-input>
         </a-form-item>
         <a-divider :style="{ margin: '0' }"></a-divider>
         <template v-for="cert,index in inbound.stream.tls.certs">
@@ -96,6 +108,18 @@
                 <a-input-number v-model.number="cert.ocspStapling" :min="0"></a-input-number>
             </a-form-item>
         </template>
+        <template v-if="inbound.stream.tls.certs.filter(c => c.certFile?.length>0 || c.cert?.length>0).length>0">
+            <a-divider :style="{ margin: '0' }"></a-divider>
+            <a-form-item label='{{ i18n "pages.outbounds.pinnedPeerCert" }}'>
+                <a-divider :style="{ margin: '0' }"></a-divider>
+                <a-select mode="tags" v-model="inbound.stream.tls.settings.pinnedPeerCertSha256"
+                    placeholder='{{ i18n "pages.outbounds.pinnedSha256" }}'
+                    :dropdown-class-name="themeSwitcher.currentTheme" :token-separators="[',']" style="width: 100%;">
+                </a-select>
+                <a-button type="primary" icon="import" @click="getCertHash">Get Cert Hash</a-button>
+            </a-form-item>
+        </template>
+        <a-divider :style="{ margin: '0' }"></a-divider>
         <a-form-item label='{{ i18n "pages.inbounds.stream.tls.echKey" }}'>
             <a-input v-model="inbound.stream.tls.echServerKeys"></a-input>
         </a-form-item>
@@ -107,6 +131,12 @@
                 <a-select-option v-for="key in ['none', 'half', 'full']" :value="key">[[ key ]]</a-select-option>
             </a-select>
         </a-form-item>
+        <a-form-item label='{{ i18n "pages.inbounds.stream.tls.echSockopt" }}'>
+            <a-switch v-model="inbound.stream.tls.echSockoptSwitch"></a-switch>
+        </a-form-item>
+        <template v-if="inbound.stream.tls.echSockoptSwitch">
+            {{template "form/sockoptFields" "inbound.stream.tls.echSockopt"}}
+        </template>
         <a-form-item label=" ">
             <a-space>
                 <a-button type="primary" icon="import" @click="getNewEchCert">Get New ECH Cert</a-button>

@@ -508,6 +508,9 @@ class TlsStreamSettings extends CommonClass {
         echConfigList = '',
         verifyPeerCertByName = '',
         pinnedPeerCertSha256 = '',
+        curvePreferences = [],
+        masterKeyLog = '',
+        echSockopt = undefined,
     ) {
         super();
         this.serverName = serverName;
@@ -517,6 +520,19 @@ class TlsStreamSettings extends CommonClass {
         this.echConfigList = echConfigList;
         this.verifyPeerCertByName = verifyPeerCertByName;
         this.pinnedPeerCertSha256 = pinnedPeerCertSha256;
+        this.curvePreferences = Array.isArray(curvePreferences)
+            ? curvePreferences
+            : (curvePreferences ? curvePreferences.split(",").map(c => c.trim()).filter(c => c.length > 0) : []);
+        this.masterKeyLog = masterKeyLog;
+        this.echSockopt = echSockopt;
+    }
+
+    get echSockoptSwitch() {
+        return !ObjectUtil.isEmpty(this.echSockopt);
+    }
+
+    set echSockoptSwitch(value) {
+        this.echSockopt = value ? new SockoptStreamSettings() : undefined;
     }
 
     static fromJson(json = {}) {
@@ -528,6 +544,9 @@ class TlsStreamSettings extends CommonClass {
             json.echConfigList,
             json.verifyPeerCertByName,
             json.pinnedPeerCertSha256,
+            json.curvePreferences,
+            json.masterKeyLog,
+            ObjectUtil.isEmpty(json.echSockopt) ? undefined : SockoptStreamSettings.fromJson(json.echSockopt),
         );
     }
 
@@ -539,7 +558,10 @@ class TlsStreamSettings extends CommonClass {
             allowInsecure: this.allowInsecure,
             echConfigList: this.echConfigList,
             verifyPeerCertByName: this.verifyPeerCertByName,
-            pinnedPeerCertSha256: this.pinnedPeerCertSha256
+            pinnedPeerCertSha256: this.pinnedPeerCertSha256,
+            curvePreferences: this.curvePreferences && this.curvePreferences.length > 0 ? this.curvePreferences : undefined,
+            masterKeyLog: this.masterKeyLog ? this.masterKeyLog : undefined,
+            echSockopt: this.echSockopt ? this.echSockopt.toJson() : undefined,
         };
     }
 }
@@ -682,24 +704,40 @@ class SockoptStreamSettings extends CommonClass {
     constructor(
         dialerProxy = "",
         tcpFastOpen = false,
-        tcpNoDelay = false,
         tcpKeepAliveInterval = 0,
         tcpMptcp = false,
         penetrate = false,
         addressPortStrategy = Address_Port_Strategy.NONE,
         happyEyeballs = new SockoptStreamSettings.HappyEyeballs(),
         trustedXForwardedFor = [],
+        mark = 0,
+        domainStrategy = "",
+        tcpMaxSeg = 0,
+        tcpKeepAliveIdle = 0,
+        tcpUserTimeout = 0,
+        tcpcongestion = "",
+        tcpWindowClamp = 0,
+        interfaceName = "",
+        customSockopt = [],
     ) {
         super();
         this.dialerProxy = dialerProxy;
         this.tcpFastOpen = tcpFastOpen;
-        this.tcpNoDelay = tcpNoDelay;
         this.tcpKeepAliveInterval = tcpKeepAliveInterval;
         this.tcpMptcp = tcpMptcp;
         this.penetrate = penetrate;
         this.addressPortStrategy = addressPortStrategy;
         this.happyEyeballs = happyEyeballs;
         this.trustedXForwardedFor = trustedXForwardedFor;
+        this.mark = mark;
+        this.domainStrategy = domainStrategy;
+        this.tcpMaxSeg = tcpMaxSeg;
+        this.tcpKeepAliveIdle = tcpKeepAliveIdle;
+        this.tcpUserTimeout = tcpUserTimeout;
+        this.tcpcongestion = tcpcongestion;
+        this.tcpWindowClamp = tcpWindowClamp;
+        this.interfaceName = interfaceName;
+        this.customSockopt = Array.isArray(customSockopt) ? customSockopt : [];
     }
 
     static fromJson(json = {}) {
@@ -707,13 +745,21 @@ class SockoptStreamSettings extends CommonClass {
         return new SockoptStreamSettings(
             json.dialerProxy,
             json.tcpFastOpen,
-            json.tcpNoDelay,
             json.tcpKeepAliveInterval,
             json.tcpMptcp,
             json.penetrate,
             json.addressPortStrategy,
             SockoptStreamSettings.HappyEyeballs.fromJson(json.happyEyeballs),
-            json.trustedXForwardedFor || []
+            json.trustedXForwardedFor || [],
+            json.mark,
+            json.domainStrategy,
+            json.tcpMaxSeg,
+            json.tcpKeepAliveIdle,
+            json.tcpUserTimeout,
+            json.tcpcongestion,
+            json.tcpWindowClamp,
+            json.interface,
+            json.customSockopt || []
         );
     }
 
@@ -721,12 +767,20 @@ class SockoptStreamSettings extends CommonClass {
         const result = {
             dialerProxy: this.dialerProxy,
             tcpFastOpen: this.tcpFastOpen,
-            tcpNoDelay: this.tcpNoDelay,
             tcpKeepAliveInterval: this.tcpKeepAliveInterval,
             tcpMptcp: this.tcpMptcp,
             penetrate: this.penetrate,
             addressPortStrategy: this.addressPortStrategy,
             happyEyeballs: this.happyEyeballs && this.happyEyeballs.enabled ? this.happyEyeballs.toJson() : undefined,
+            mark: this.mark ? this.mark : undefined,
+            domainStrategy: this.domainStrategy ? this.domainStrategy : undefined,
+            tcpMaxSeg: this.tcpMaxSeg ? this.tcpMaxSeg : undefined,
+            tcpKeepAliveIdle: this.tcpKeepAliveIdle ? this.tcpKeepAliveIdle : undefined,
+            tcpUserTimeout: this.tcpUserTimeout ? this.tcpUserTimeout : undefined,
+            tcpcongestion: this.tcpcongestion ? this.tcpcongestion : undefined,
+            tcpWindowClamp: this.tcpWindowClamp ? this.tcpWindowClamp : undefined,
+            interface: this.interfaceName ? this.interfaceName : undefined,
+            customSockopt: this.customSockopt && this.customSockopt.length > 0 ? this.customSockopt : undefined,
         };
         if (this.trustedXForwardedFor && this.trustedXForwardedFor.length > 0) {
             result.trustedXForwardedFor = this.trustedXForwardedFor;
@@ -1337,7 +1391,10 @@ class Outbound extends CommonClass {
                 json.sni,
                 json.alpn ? json.alpn.split(',') : [],
                 json.fp,
-                json.allowInsecure);
+                json.allowInsecure,
+                json.ech ?? '',
+                json.vcn ?? '',
+                json.pcs ?? '');
         }
 
         const port = json.port * 1;
@@ -1391,7 +1448,9 @@ class Outbound extends CommonClass {
             let allowInsecure = url.searchParams.get('allowInsecure');
             let sni = url.searchParams.get('sni') ?? '';
             let ech = url.searchParams.get('ech') ?? '';
-            stream.tls = new TlsStreamSettings(sni, alpn ? alpn.split(',') : [], fp, allowInsecure == 1, ech);
+            let vcn = url.searchParams.get('vcn') ?? '';
+            let pcs = url.searchParams.get('pcs') ?? '';
+            stream.tls = new TlsStreamSettings(sni, alpn ? alpn.split(',') : [], fp, allowInsecure == 1, ech, vcn, pcs);
         }
 
         if (security == 'reality') {
@@ -1493,6 +1552,9 @@ class Outbound extends CommonClass {
                 urlParams.get('alpn') ? urlParams.get('alpn').split(',') : [],
                 urlParams.get('fp') ?? undefined,
                 urlParams.get('insecure') ?? urlParams.get('allowInsecure') ?? false,
+                urlParams.get('ech') ?? '',
+                urlParams.get('vcn') ?? '',
+                urlParams.get('pcs') ?? '',
             );
         }
         

@@ -458,7 +458,6 @@
 {{template "js" .}}
 <script src="{{ .base_path }}assets/base64/base64.min.js"></script>
 <script src="{{ .base_path }}assets/qrcode/qrious.min.js"></script>
-<script src="{{ .base_path }}assets/clipboard/clipboard.min.js?{{ .cur_ver }}"></script>
 <script src="{{ .base_path }}assets/uri/URI.min.js?{{ .cur_ver }}"></script>
 <script src="{{ .base_path }}assets/js/model/inbound.js?{{ .cur_ver }}"></script>
 <script src="{{ .base_path }}assets/js/model/dbinbound.js?{{ .cur_ver }}"></script>
@@ -1298,7 +1297,7 @@
                     title: '{{ i18n "pages.inbounds.importInbound" }}',
                     type: 'textarea',
                     value: '',
-                    okText: '{{ i18n "pages.inbounds.import" }}',
+                    okText: '{{ i18n "import" }}',
                     confirm: async (dbInboundText) => {
                         await this.submit('/xui/inbound/import', {data: dbInboundText}, promptModal);
                     },

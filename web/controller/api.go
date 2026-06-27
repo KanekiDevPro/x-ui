@@ -85,6 +85,7 @@ func (a *APIController) outboundApi(api *gin.RouterGroup) {
 		{"POST", "/resetAllTraffics", a.outboundController.resetAllTraffics},
 		{"POST", "/onlines", a.outboundController.onlines},
 		{"POST", "/test", a.outboundController.test},
+		{"POST", "/reverseTags", a.outboundController.getClientReverseTags},
 	}
 
 	for _, route := range outboundRoutes {
@@ -131,6 +132,8 @@ func (a *APIController) serverApi(api *gin.RouterGroup) {
 		{"GET", "/getNewmldsa65", a.serverController.getNewmldsa65},
 
 		{"POST", "/getNewEchCert", a.serverController.getNewEchCert},
+		{"POST", "/getCertHash", a.serverController.getCertHash},
+		{"POST", "/getTlsPing", a.serverController.getTlsPing},
 		{"POST", "/importDB", a.serverController.importDB},
 		{"POST", "/stopXrayService", a.serverController.stopXrayService},
 		{"POST", "/restartXrayService", a.serverController.restartXrayService},

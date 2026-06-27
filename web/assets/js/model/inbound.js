@@ -822,6 +822,9 @@ class TlsStreamSettings extends XrayCommonClass {
         alpn = [ALPN_OPTION.H3, ALPN_OPTION.H2, ALPN_OPTION.HTTP1],
         echServerKeys = '',
         echForceQuery = 'none',
+        curvePreferences = [],
+        masterKeyLog = '',
+        echSockopt = undefined,
         settings = new TlsStreamSettings.Settings()
     ) {
         super();
@@ -836,7 +839,20 @@ class TlsStreamSettings extends XrayCommonClass {
         this.alpn = alpn;
         this.echServerKeys = echServerKeys;
         this.echForceQuery = echForceQuery;
+        this.curvePreferences = Array.isArray(curvePreferences)
+            ? curvePreferences
+            : (curvePreferences ? curvePreferences.split(",").map(c => c.trim()).filter(c => c.length > 0) : []);
+        this.masterKeyLog = masterKeyLog;
+        this.echSockopt = echSockopt;
         this.settings = settings;
+    }
+
+    get echSockoptSwitch() {
+        return !ObjectUtil.isEmpty(this.echSockopt);
+    }
+
+    set echSockoptSwitch(value) {
+        this.echSockopt = value ? new SockoptStreamSettings() : undefined;
     }
 
     addCert() {
@@ -855,7 +871,7 @@ class TlsStreamSettings extends XrayCommonClass {
         }
 
         if (!ObjectUtil.isEmpty(json.settings)) {
-            settings = new TlsStreamSettings.Settings(json.settings.allowInsecure, json.settings.fingerprint, json.settings.echConfigList);
+            settings = new TlsStreamSettings.Settings(json.settings.allowInsecure, json.settings.fingerprint, json.settings.echConfigList, json.settings.pinnedPeerCertSha256, json.settings.verifyPeerCertByName);
         }
         return new TlsStreamSettings(
             json.serverName,
@@ -869,6 +885,9 @@ class TlsStreamSettings extends XrayCommonClass {
             json.alpn,
             json.echServerKeys,
             json.echForceQuery,
+            json.curvePreferences,
+            json.masterKeyLog,
+            ObjectUtil.isEmpty(json.echSockopt) ? undefined : SockoptStreamSettings.fromJson(json.echSockopt),
             settings,
         );
     }
@@ -886,6 +905,9 @@ class TlsStreamSettings extends XrayCommonClass {
             alpn: this.alpn,
             echServerKeys: this.echServerKeys,
             echForceQuery: this.echForceQuery,
+            curvePreferences: this.curvePreferences && this.curvePreferences.length > 0 ? this.curvePreferences : undefined,
+            masterKeyLog: this.masterKeyLog ? this.masterKeyLog : undefined,
+            echSockopt: this.echSockopt ? this.echSockopt.toJson() : undefined,
             settings: this.settings,
         };
     }
@@ -967,17 +989,25 @@ TlsStreamSettings.Settings = class extends XrayCommonClass {
         allowInsecure = false,
         fingerprint = UTLS_FINGERPRINT.UTLS_CHROME,
         echConfigList = '',
+        pinnedPeerCertSha256 = [],
+        verifyPeerCertByName = '',
     ) {
         super();
         this.allowInsecure = allowInsecure;
         this.fingerprint = fingerprint;
         this.echConfigList = echConfigList;
+        this.pinnedPeerCertSha256 = Array.isArray(pinnedPeerCertSha256)
+            ? pinnedPeerCertSha256
+            : (pinnedPeerCertSha256 ? pinnedPeerCertSha256.split(",").map(h => h.trim()).filter(h => h.length > 0) : []);
+        this.verifyPeerCertByName = verifyPeerCertByName;
     }
     static fromJson(json = {}) {
         return new TlsStreamSettings.Settings(
             json.allowInsecure,
             json.fingerprint,
             json.echConfigList,
+            json.pinnedPeerCertSha256,
+            json.verifyPeerCertByName,
         );
     }
     toJson() {
@@ -985,6 +1015,8 @@ TlsStreamSettings.Settings = class extends XrayCommonClass {
             allowInsecure: this.allowInsecure,
             fingerprint: this.fingerprint,
             echConfigList: this.echConfigList,
+            pinnedPeerCertSha256: this.pinnedPeerCertSha256 && this.pinnedPeerCertSha256.length > 0 ? this.pinnedPeerCertSha256 : undefined,
+            verifyPeerCertByName: this.verifyPeerCertByName ? this.verifyPeerCertByName : undefined,
         };
     }
 };
@@ -1142,14 +1174,12 @@ class SockoptStreamSettings extends XrayCommonClass {
     constructor(
         acceptProxyProtocol = false,
         tcpFastOpen = false,
-        tcpNoDelay = false,
         mark = 0,
         tproxy = "off",
         tcpMptcp = false,
         penetrate = false,
         domainStrategy = DOMAIN_STRATEGY_OPTION.USE_IP,
         tcpMaxSeg = 1440,
-        dialerProxy = "",
         tcpKeepAliveInterval = 0,
         tcpKeepAliveIdle = 300,
         tcpUserTimeout = 10000,
@@ -1158,18 +1188,17 @@ class SockoptStreamSettings extends XrayCommonClass {
         tcpWindowClamp = 600,
         interfaceName = "",
         trustedXForwardedFor = [],
+        customSockopt = [],
     ) {
         super();
         this.acceptProxyProtocol = acceptProxyProtocol;
         this.tcpFastOpen = tcpFastOpen;
-        this.tcpNoDelay = tcpNoDelay;
         this.mark = mark;
         this.tproxy = tproxy;
         this.tcpMptcp = tcpMptcp;
         this.penetrate = penetrate;
         this.domainStrategy = domainStrategy;
         this.tcpMaxSeg = tcpMaxSeg;
-        this.dialerProxy = dialerProxy;
         this.tcpKeepAliveInterval = tcpKeepAliveInterval;
         this.tcpKeepAliveIdle = tcpKeepAliveIdle;
         this.tcpUserTimeout = tcpUserTimeout;
@@ -1178,6 +1207,7 @@ class SockoptStreamSettings extends XrayCommonClass {
         this.tcpWindowClamp = tcpWindowClamp;
         this.interfaceName = interfaceName;
         this.trustedXForwardedFor = trustedXForwardedFor;
+        this.customSockopt = Array.isArray(customSockopt) ? customSockopt : [];
     }
 
     static fromJson(json = {}) {
@@ -1185,14 +1215,12 @@ class SockoptStreamSettings extends XrayCommonClass {
         return new SockoptStreamSettings(
             json.acceptProxyProtocol,
             json.tcpFastOpen,
-            json.tcpNoDelay,
             json.mark,
             json.tproxy,
             json.tcpMptcp,
             json.penetrate,
             json.domainStrategy,
             json.tcpMaxSeg,
-            json.dialerProxy,
             json.tcpKeepAliveInterval,
             json.tcpKeepAliveIdle,
             json.tcpUserTimeout,
@@ -1201,6 +1229,7 @@ class SockoptStreamSettings extends XrayCommonClass {
             json.tcpWindowClamp,
             json.interface,
             json.trustedXForwardedFor || [],
+            json.customSockopt || [],
         );
     }
 
@@ -1208,14 +1237,12 @@ class SockoptStreamSettings extends XrayCommonClass {
         const result = {
             acceptProxyProtocol: this.acceptProxyProtocol,
             tcpFastOpen: this.tcpFastOpen,
-            tcpNoDelay: this.tcpNoDelay,
             mark: this.mark,
             tproxy: this.tproxy,
             tcpMptcp: this.tcpMptcp,
             penetrate: this.penetrate,
             domainStrategy: this.domainStrategy,
             tcpMaxSeg: this.tcpMaxSeg,
-            dialerProxy: this.dialerProxy,
             tcpKeepAliveInterval: this.tcpKeepAliveInterval,
             tcpKeepAliveIdle: this.tcpKeepAliveIdle,
             tcpUserTimeout: this.tcpUserTimeout,
@@ -1226,6 +1253,9 @@ class SockoptStreamSettings extends XrayCommonClass {
         };
         if (this.trustedXForwardedFor && this.trustedXForwardedFor.length > 0) {
             result.trustedXForwardedFor = this.trustedXForwardedFor;
+        }
+        if (this.customSockopt && this.customSockopt.length > 0) {
+            result.customSockopt = this.customSockopt;
         }
         return result;
     }
@@ -1965,6 +1995,12 @@ class Inbound extends XrayCommonClass {
             if (this.stream.tls.settings.allowInsecure) {
                 obj.allowInsecure = this.stream.tls.settings.allowInsecure;
             }
+            if (this.stream.tls.settings.pinnedPeerCertSha256?.length > 0) {
+                obj.pcs = this.stream.tls.settings.pinnedPeerCertSha256.join(",");
+            }
+            if (!ObjectUtil.isEmpty(this.stream.tls.settings.verifyPeerCertByName)) {
+                obj.vcn = this.stream.tls.settings.verifyPeerCertByName;
+            }
         }
 
         if (extProxy) {
@@ -2055,6 +2091,12 @@ class Inbound extends XrayCommonClass {
                 }
                 if (this.stream.tls.settings.echConfigList?.length > 0) {
                     params.set("ech", this.stream.tls.settings.echConfigList);
+                }
+                if (this.stream.tls.settings.pinnedPeerCertSha256?.length > 0) {
+                    params.set("pcs", this.stream.tls.settings.pinnedPeerCertSha256.join(","));
+                }
+                if (!ObjectUtil.isEmpty(this.stream.tls.settings.verifyPeerCertByName)) {
+                    params.set("vcn", this.stream.tls.settings.verifyPeerCertByName);
                 }
                 if (type == "tcp" && !ObjectUtil.isEmpty(flow)) {
                     params.set("flow", flow);
@@ -2178,6 +2220,12 @@ class Inbound extends XrayCommonClass {
                 if (this.stream.tls.settings.echConfigList?.length > 0) {
                     params.set("ech", this.stream.tls.settings.echConfigList);
                 }
+                if (this.stream.tls.settings.pinnedPeerCertSha256?.length > 0) {
+                    params.set("pcs", this.stream.tls.settings.pinnedPeerCertSha256.join(","));
+                }
+                if (!ObjectUtil.isEmpty(this.stream.tls.settings.verifyPeerCertByName)) {
+                    params.set("vcn", this.stream.tls.settings.verifyPeerCertByName);
+                }
                 if (!ObjectUtil.isEmpty(this.stream.tls.sni)) {
                     params.set("sni", this.stream.tls.sni);
                 }
@@ -2279,6 +2327,12 @@ class Inbound extends XrayCommonClass {
                 if (this.stream.tls.settings.echConfigList?.length > 0) {
                     params.set("ech", this.stream.tls.settings.echConfigList);
                 }
+                if (this.stream.tls.settings.pinnedPeerCertSha256?.length > 0) {
+                    params.set("pcs", this.stream.tls.settings.pinnedPeerCertSha256.join(","));
+                }
+                if (!ObjectUtil.isEmpty(this.stream.tls.settings.verifyPeerCertByName)) {
+                    params.set("vcn", this.stream.tls.settings.verifyPeerCertByName);
+                }
                 if (!ObjectUtil.isEmpty(this.stream.tls.sni)) {
                     params.set("sni", this.stream.tls.sni);
                 }
@@ -2344,7 +2398,9 @@ class Inbound extends XrayCommonClass {
         if (this.stream.tls.settings.fingerprint?.length > 0) params.set("fp", this.stream.tls.settings.fingerprint);
         if (this.stream.tls.alpn?.length > 0) params.set("alpn", this.stream.tls.alpn);
         if (this.stream.tls.settings.allowInsecure) params.set("insecure", "1");
-        if (this.stream.tls.settings.echConfigList?.length > 0) params.set("ech", this.stream.tls.settings.echConfigList.join(','));
+        if (this.stream.tls.settings.echConfigList?.length > 0) params.set("ech", this.stream.tls.settings.echConfigList);
+        if (this.stream.tls.settings.pinnedPeerCertSha256?.length > 0) params.set("pcs", this.stream.tls.settings.pinnedPeerCertSha256.join(","));
+        if (!ObjectUtil.isEmpty(this.stream.tls.settings.verifyPeerCertByName)) params.set("vcn", this.stream.tls.settings.verifyPeerCertByName);
         if (this.stream.tls.sni?.length > 0) params.set("sni", this.stream.tls.sni);
 
         if (extProxy) {
@@ -2397,7 +2453,6 @@ class Inbound extends XrayCommonClass {
     }
 
     genLink(address = '', port = this.port, extProxy = new ExternalProxy('same'), remark = '', client) {
-        console.log(extProxy);
         switch (this.protocol) {
             case Protocols.VMESS:
                 return this.genVmessLink(address, port, extProxy, remark, client.id, client.security);
